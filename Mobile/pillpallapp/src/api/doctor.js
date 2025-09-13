@@ -73,15 +73,16 @@ export const downloadReportPdf = async (patientId, from, to) => {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      responseType: 'arraybuffer', // Pour gérer les fichiers binaires
+      responseType: 'json', 
     });
-    const base64 = Buffer.from(response.data, 'binary').toString('base64');
-    return { data: base64, headers: response.headers };
+    console.log('Réponse brute downloadReportPdf:', JSON.stringify(response, null, 2));
+    return response; 
   } catch (error) {
     console.error('Erreur downloadReportPdf:', error.response?.data || error.message);
     throw error;
   }
 };
+
 
 const getAuthHeaders = async () => {
   const token = await AsyncStorage.getItem('token');

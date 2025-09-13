@@ -76,31 +76,42 @@ const ReportScreen = ({ navigation }) => {
     try {
       console.log('Téléchargement PDF - patientId:', patientId, 'from:', from, 'to:', to);
       const res = await downloadReportPdf(patientId, from, to);
+      console.log('Réponse downloadReportPdf:', JSON.stringify(res, null, 2));
+
+      if (!res.data || !res.data.pdf) {
+        console.error('Erreur: Aucune donnée PDF dans la réponse:', res.data);
+        Alert.alert('Erreur', 'Aucune donnée PDF reçue du serveur');
+        return;
+      }
+
+      const base64Data = res.data.pdf;
       const date = moment().format('YYYYMMDD_HHmmss');
       const filePath = Platform.OS === 'ios'
         ? `${ReactNativeBlobUtil.fs.dirs.DocumentDir}/rapport-${patientId}-${date}.pdf`
         : `${ReactNativeBlobUtil.fs.dirs.DownloadDir}/rapport-${patientId}-${date}.pdf`;
 
-      await ReactNativeBlobUtil.fs.writeFile(filePath, res.data, 'base64');
+      await ReactNativeBlobUtil.fs.writeFile(filePath, base64Data, 'base64');
+      console.log('Fichier PDF écrit à:', filePath);
       Alert.alert('Succès', `Rapport téléchargé à : ${filePath}`);
+
       if (Platform.OS === 'android') {
-        ReactNativeBlobUtil.android.actionViewIntent(filePath, 'application/pdf');
+        await ReactNativeBlobUtil.android.actionViewIntent(filePath, 'application/pdf');
       } else {
-        ReactNativeBlobUtil.ios.previewDocument(filePath);
+        await ReactNativeBlobUtil.ios.previewDocument(filePath);
       }
     } catch (error) {
       console.error('Erreur téléchargement PDF:', error.response?.data || error.message);
       let errorMessage = 'Échec du téléchargement du rapport';
       if (error.response?.status === 400) {
-        errorMessage = 'Paramètres de requête invalides';
+        errorMessage = error.response.data?.error || 'Paramètres de requête invalides';
       } else if (error.response?.status === 401 || error.response?.status === 403) {
         errorMessage = 'Session invalide. Veuillez vous reconnecter.';
         await logout();
         navigation.replace('Login');
       } else if (error.response?.status === 404) {
-        errorMessage = 'Patient non trouvé';
+        errorMessage = error.response.data?.error || 'Patient non trouvé';
       } else if (error.response?.status === 500) {
-        errorMessage = 'Erreur serveur. Veuillez réessayer plus tard.';
+        errorMessage = error.response.data?.error || 'Erreur serveur. Veuillez réessayer plus tard.';
       }
       Alert.alert('Erreur', errorMessage);
     }

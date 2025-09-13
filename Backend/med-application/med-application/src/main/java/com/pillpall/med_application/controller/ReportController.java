@@ -20,17 +20,16 @@ import com.pillpall.med_application.users.PatientProfileRepository;
 import com.pillpall.med_application.users.UserRepository;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.ByteArrayOutputStream;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -49,13 +48,14 @@ public class ReportController {
     private final AnomalyDetectionRepository anomalyDetectionRepository;
     private final PatientProfileRepository patientProfileRepository;
 
+    //Generation du rapport du patient en une periode de temps
+
     @GetMapping("/{patientId}")
     public ResponseEntity<?> generateReport(@AuthenticationPrincipal String email,
                                             @PathVariable Long patientId,
                                             @RequestParam(required = false) LocalDate from,
                                             @RequestParam(required = false) LocalDate to) {
         try {
-            // Vérifier les paramètres from et to
             if (from == null || to == null) {
                 return ResponseEntity.badRequest().body("Les paramètres 'from' et 'to' sont requis au format YYYY-MM-DD");
             }
@@ -72,7 +72,6 @@ public class ReportController {
             Instant start = from.atStartOfDay(ZoneId.systemDefault()).toInstant();
             Instant end = to.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
 
-            // Infos patient
             Map<String, Object> report = new HashMap<>();
             report.put("patientInfo", new PatientInfo(
                     patient.getUser().getFullName(),
@@ -80,7 +79,6 @@ public class ReportController {
                     patient.getBirthDate()
             ));
 
-            // Prescriptions dans période
             List<Prescription> prescriptions = prescriptionRepository.findByPatientIdAndDateRange(patientId, from, to);
             List<PrescriptionDTO> prescriptionDTOs = prescriptions != null
                     ? prescriptions.stream()
@@ -98,7 +96,6 @@ public class ReportController {
                     : Collections.emptyList();
             report.put("prescriptions", prescriptionDTOs);
 
-            // Bilan observance
             List<IntakeEvent> events = intakeEventRepository.findByPrescriptionPatientIdAndScheduledAtBetween(patientId, start, end);
             double adherenceRate = events != null && !events.isEmpty()
                     ? (double) events.stream().filter(e -> e.getStatus() == IntakeEvent.Status.CONFIRMED).count() / events.size()
@@ -109,7 +106,6 @@ public class ReportController {
             report.put("adherenceRate", adherenceRate);
             report.put("missedDoses", missedDoses);
 
-            // Anomalies et dangers
             List<Anomaly> anomalies = anomalyDetectionRepository.findAnomaliesByPatientIdAndDateRange(patientId, start, end);
             List<AnomalyDTO> anomalyDTOs = anomalies != null
                     ? anomalies.stream()
@@ -120,7 +116,6 @@ public class ReportController {
             report.put("anomalies", anomalyDTOs);
             report.put("hasDanger", hasDanger);
 
-            // Si le rapport est vide
             if (prescriptionDTOs.isEmpty() && anomalyDTOs.isEmpty() && adherenceRate == 0.0 && missedDoses == 0) {
                 return ResponseEntity.ok().body(Map.of(
                         "message", "Aucune donnée disponible pour ce patient dans la période spécifiée",
@@ -137,17 +132,15 @@ public class ReportController {
         }
     }
 
-    //Generation du rapport sous forme pdf
-
+//Pour le rapport format pdf
     @GetMapping("/{patientId}/pdf")
-    public ResponseEntity<byte[]> generateReportPdf(@AuthenticationPrincipal String email,
-                                                    @PathVariable Long patientId,
-                                                    @RequestParam(required = false) LocalDate from,
-                                                    @RequestParam(required = false) LocalDate to) {
+    public ResponseEntity<?> generateReportPdf(@AuthenticationPrincipal String email,
+                                               @PathVariable Long patientId,
+                                               @RequestParam(required = false) LocalDate from,
+                                               @RequestParam(required = false) LocalDate to) {
         try {
-            // Vérifier les paramètres from et to
             if (from == null || to == null) {
-                return ResponseEntity.badRequest().body(null);
+                return ResponseEntity.badRequest().body("Les paramètres 'from' et 'to' sont requis au format YYYY-MM-DD");
             }
 
             var user = userRepository.findByEmail(email).orElseThrow(() -> new IllegalArgumentException("Utilisateur non trouvé"));
@@ -156,13 +149,12 @@ public class ReportController {
             PatientProfile patient = patientProfileRepository.findById(patientId)
                     .orElseThrow(() -> new IllegalArgumentException("Patient non trouvé"));
             if (!patient.getDoctors().contains(doctor)) {
-                return ResponseEntity.status(403).body(null);
+                return ResponseEntity.status(403).body("Patient not under your care");
             }
 
             Instant start = from.atStartOfDay(ZoneId.systemDefault()).toInstant();
             Instant end = to.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
 
-            // Générer le PDF
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             PdfWriter writer = new PdfWriter(baos);
             PdfDocument pdf = new PdfDocument(writer);
@@ -238,17 +230,19 @@ public class ReportController {
 
             document.close();
 
-            byte[] pdfBytes = baos.toByteArray();
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_PDF);
-            headers.setContentDispositionFormData("attachment", "rapport-" + patientId + ".pdf");
+            // Convertir le PDF en base64
+            String base64Pdf = Base64.getEncoder().encodeToString(baos.toByteArray());
+            Map<String, String> response = new HashMap<>();
+            response.put("pdf", base64Pdf);
 
-            return ResponseEntity.ok().headers(headers).body(pdfBytes);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(response);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(404).body(null);
+            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             e.printStackTrace();
-            return ResponseEntity.status(500).body(null);
+            return ResponseEntity.status(500).body(Map.of("error", "Erreur serveur: " + e.getMessage()));
         }
     }
 

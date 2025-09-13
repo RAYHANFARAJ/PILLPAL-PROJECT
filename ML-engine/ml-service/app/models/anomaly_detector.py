@@ -60,3 +60,22 @@ class AnomalyDetector:
                 "severity": "MEDIUM",
                 "explanation": "Changement de comportement détecté"
             }
+
+    def _is_sudden_stop(self, anomalous_events):
+        # Détecte 3+ prises manquées consécutives (assume events triés par temps)
+        consecutive_missed = 0
+        max_consecutive = 0
+        for e in anomalous_events:
+            if e['status'] == 'MISSED':
+                consecutive_missed += 1
+                max_consecutive = max(max_consecutive, consecutive_missed)
+            else:
+                consecutive_missed = 0
+        return max_consecutive >= 3
+
+    def _is_overdose_pattern(self, anomalous_events):
+        # Détecte des delays négatifs (prises trop tôt) ou < 5 min
+        for e in anomalous_events:
+            if e['delay_minutes'] is not None and e['delay_minutes'] < 5:  # Ajuste le seuil si besoin
+                return True
+        return False

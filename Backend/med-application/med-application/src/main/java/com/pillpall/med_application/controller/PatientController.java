@@ -17,11 +17,11 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/patient")
 @RequiredArgsConstructor
 public class PatientController {
-    private final UserRepository userRepository;
+   private final UserRepository userRepository;
     private final PatientProfileRepository patientRepository;
     private final DoctorProfileRepository doctorRepository;
 
-    // Mise à jour du deviceToken pour FCM
+    // Mise à jour du deviceToken
     @PutMapping("/device-token")
     public ResponseEntity<?> updateDeviceToken(@AuthenticationPrincipal String email, @RequestBody UserController.DeviceTokenReq req) {
         var user = userRepository.findByEmail(email).orElseThrow();
@@ -54,7 +54,8 @@ public class PatientController {
         return ResponseEntity.ok(info);
     }
 
-    //La gestion des médecins du patient : il peut  ajouter un médecin (trouvé déjà dans la base de données)
+    //La gestion des méedecins du patient : il peut soit ajouter un médecin (trouvé déjà dans la base de données)
+    // et supprimer ses médecins
 
     @PostMapping("/doctors/{doctorId}")
     public ResponseEntity<?> addDoctor(@AuthenticationPrincipal String email, @PathVariable Long doctorId) {
@@ -76,7 +77,6 @@ public class PatientController {
         return ResponseEntity.ok().build();
     }
 
-    //Lister les medecins du patient
     @GetMapping("/doctors")
     public ResponseEntity<?> getDoctors(@AuthenticationPrincipal String email) {
         var user = userRepository.findByEmail(email).orElseThrow();

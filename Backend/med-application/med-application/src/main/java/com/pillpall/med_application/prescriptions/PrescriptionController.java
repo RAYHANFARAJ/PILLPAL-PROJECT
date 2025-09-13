@@ -36,7 +36,7 @@ public class PrescriptionController {
         var doctor = doctors.findByUserId(user.getId()).orElseThrow();
         var patient = patients.findById(req.getPatientId()).orElseThrow();
 
-        // Vérifier si le patient est suivi par ce doctor
+        // Vérif si le patient est suivi par ce doctor (via nouvelle relation)
         if (!patient.getDoctors().contains(doctor)) {
             return ResponseEntity.badRequest().body("Patient not under your care");
         }
@@ -50,9 +50,7 @@ public class PrescriptionController {
                 .endDate(req.getEndDate())
                 .createdAt(Instant.now())
                 .build();
-
         // Créer les DoseTime et lier à la prescription
-
         List<DoseTime> doseTimes = req.getDoseTimes().stream()
                 .map(t -> DoseTime.builder()
                         .hour(t.getHour())
@@ -65,8 +63,6 @@ public class PrescriptionController {
         var saved = service.createAndPlan(p, patient);
         return ResponseEntity.ok(saved.getId());
     }
-
-    //Modification de la prescription
 
     @PutMapping("/{id}")
     public ResponseEntity<?> update(
@@ -93,9 +89,6 @@ public class PrescriptionController {
                         .collect(Collectors.toList())
         ));
     }
-
-    //Supression d'une prescription
-
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@AuthenticationPrincipal String email, @PathVariable Long id) {
         var user = users.findByEmail(email).orElseThrow();
@@ -126,7 +119,6 @@ public class PrescriptionController {
     }
 
     // Endpoint pour consulter prescriptions par patient
-
     @GetMapping("/patient/{patientId}")
     public ResponseEntity<?> getByPatient(@AuthenticationPrincipal String email, @PathVariable Long patientId) {
         var user = users.findByEmail(email).orElseThrow();
@@ -158,7 +150,10 @@ public class PrescriptionController {
     //Ajouter une prescription par le scan d'un document
 
     @PostMapping("/scan")
-    public ResponseEntity<?> scanDocument(@AuthenticationPrincipal String email, @RequestPart("file") MultipartFile file, @RequestParam Long patientId) {
+    public ResponseEntity<?> scanDocument(
+            @AuthenticationPrincipal String email,
+            @RequestPart("file") MultipartFile file,
+            @RequestParam Long patientId) {
         var user = users.findByEmail(email).orElseThrow();
         var doctor = doctors.findByUserId(user.getId()).orElseThrow();
         var patient = patients.findById(patientId).orElseThrow();
@@ -167,7 +162,8 @@ public class PrescriptionController {
             return ResponseEntity.badRequest().body("Patient not under your care");
         }
 
-        Map<String, String> extracted = ocrService.extractFromImage(file);
+        // Convertir Long patientId en String pour OcrService
+        Map<String, String> extracted = ocrService.extractFromImage(file, patientId.toString());
         return ResponseEntity.ok(extracted); // Retourne les champs extraits pour le frontend
     }
 
@@ -178,15 +174,15 @@ public class PrescriptionController {
 
 
 
-    @Data
-    public static class CreatePrescription {
-        @NotNull private Long patientId;
-        @NotBlank private String medicationName;
-        private String dosage;
-        @NotNull private LocalDate startDate;
-        @NotNull private LocalDate endDate;
-        @NotNull private List<HM> doseTimes;
-        @Data public static class HM { @Min(0) @Max(23) private int hour; @Min(0) @Max(59) private int minute; }
-    }
+@Data
+public static class CreatePrescription {
+    @NotNull private Long patientId;
+    @NotBlank private String medicationName;
+    private String dosage;
+    @NotNull private LocalDate startDate;
+    @NotNull private LocalDate endDate;
+    @NotNull private List<HM> doseTimes;
+    @Data public static class HM { @Min(0) @Max(23) private int hour; @Min(0) @Max(59) private int minute; }
+}
 
 }

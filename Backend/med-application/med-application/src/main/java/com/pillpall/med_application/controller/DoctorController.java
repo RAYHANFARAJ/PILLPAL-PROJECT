@@ -83,7 +83,7 @@ public class DoctorController {
         return ResponseEntity.ok(stats);
     }
 
-    //Les observances par patient
+    //Les observances
 
     @GetMapping("/patients/{patientId}/observance")
     public ResponseEntity<?> getPatientObservance(

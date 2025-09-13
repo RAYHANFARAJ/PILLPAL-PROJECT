@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, Alert } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import Header from '../../components/Header';
@@ -11,18 +11,21 @@ const ObservanceScreen = ({ navigation }) => {
   const [patientId, setPatientId] = useState('');
   const [patients, setPatients] = useState([]);
   const [observance, setObservance] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    setLoading(true);
     getPatients()
       .then((res) => {
-        console.log('Patients:', res.data);
+        console.log('Patients response:', JSON.stringify(res.data, null, 2));
         setPatients(Array.isArray(res.data) ? res.data : []);
       })
       .catch((error) => {
         console.error('Erreur getPatients:', error.response?.data || error.message);
         Alert.alert('Erreur', 'Impossible de charger les patients');
         setPatients([]);
-      });
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -35,28 +38,32 @@ const ObservanceScreen = ({ navigation }) => {
   }, [patientId]);
 
   const fetchObservance = async () => {
+    setLoading(true);
     try {
       console.log('Calling getObservance with patientId:', patientId);
       const res = await getObservance(patientId);
       console.log('Réponse brute API observance:', JSON.stringify(res.data, null, 2));
-      if (typeof res.data === 'string') {
+      
+      if (!res.data || res.data === 'Aucune observance trouvée') {
         console.warn('Aucune donnée d\'observance:', res.data);
         setObservance([]);
-        Alert.alert('Info', res.data);
+        Alert.alert('Info', 'Aucune observance trouvée pour ce patient');
         return;
       }
+      
       if (!Array.isArray(res.data)) {
         console.error('Erreur: res.data n\'est pas un tableau:', res.data);
         setObservance([]);
         Alert.alert('Erreur', 'Réponse invalide du serveur');
         return;
       }
+      
       setObservance(res.data);
     } catch (error) {
       console.error('Erreur fetchObservance:', error.response?.data || error.message);
       let errorMessage = 'Impossible de charger les données d\'observance';
       if (error.response?.status === 403) {
-        errorMessage = 'Patient non associé à ce médecin';
+        errorMessage = 'Vous n\'êtes pas autorisé à voir les données de ce patient';
       } else if (error.response?.status === 404) {
         errorMessage = 'Patient non trouvé';
       } else if (error.response?.status === 500) {
@@ -64,6 +71,8 @@ const ObservanceScreen = ({ navigation }) => {
       }
       Alert.alert('Erreur', errorMessage);
       setObservance([]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -103,13 +112,15 @@ const ObservanceScreen = ({ navigation }) => {
             ))}
           </Picker>
         </View>
-        {patientId && (
+        {loading ? (
+          <ActivityIndicator size="large" color="#1E40AF" style={styles.loader} />
+        ) : patientId ? (
           <>
             <Text style={styles.sectionTitle}>Observance du patient</Text>
             {observance.length > 0 ? (
               <FlatList
                 data={observance}
-                keyExtractor={(item, index) => index.toString()}
+                keyExtractor={(item, index) => (item.id ? item.id.toString() : `observance-${index}`)}
                 renderItem={({ item }) => (
                   <View style={styles.card}>
                     <Icon name="medication" size={24} color="#1E40AF" style={styles.cardIcon} />
@@ -126,6 +137,8 @@ const ObservanceScreen = ({ navigation }) => {
               <Text style={styles.noData}>Aucune donnée d'observance disponible</Text>
             )}
           </>
+        ) : (
+          <Text style={styles.noData}>Veuillez sélectionner un patient</Text>
         )}
       </View>
     </View>
@@ -175,6 +188,10 @@ const styles = StyleSheet.create({
     color: '#666666',
     marginVertical: 16,
     fontSize: 16,
+  },
+  loader: {
+    flex: 1,
+    justifyContent: 'center',
   },
 });
 
