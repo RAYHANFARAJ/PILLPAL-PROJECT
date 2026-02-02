@@ -20,6 +20,7 @@ public class SecurityConfig {
         http.csrf(csrf->csrf.disable())
                 .sessionManagement(sm->sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth->auth
+                        .requestMatchers("/api/dispenser/status").permitAll() // Allow ESP32 access
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/auth/**", "/api/specialties/public", "/api/doctor/public").permitAll()
                         .requestMatchers("api/doctor/**").hasRole("DOCTOR")
