@@ -1,28 +1,39 @@
 package com.pillpall.med_application.prescriptions;
 
+import com.pillpall.med_application.dispenser.DispenserService;
 import com.pillpall.med_application.intakes.IntakeEvent;
 import com.pillpall.med_application.intakes.IntakeEventRepository;
 import com.pillpall.med_application.users.DoctorProfile;
 import com.pillpall.med_application.users.PatientProfile;
 import com.pillpall.med_application.users.PatientProfileRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service; import org.springframework.transaction.annotation.Transactional;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import java.time.*;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@Service @RequiredArgsConstructor
+@Service
+@RequiredArgsConstructor
+@Slf4j
 public class PrescriptionService {
     private final PrescriptionRepository prescriptions;
     private final IntakeEventRepository intakes;
     private final PatientProfileRepository patients;
     private final IntakeEventRepository intakeEvents;
+    private final DispenserService dispenserService; // Ajout pour synchronisation automatique
 
     @Transactional
     public Prescription createAndPlan(Prescription p, PatientProfile patient) {
         p.setPatient(patient);
         Prescription saved = prescriptions.save(p);
         generateEvents(saved);
+
+        // Synchronisation automatique avec le distributeur
+        syncWithDispenser(patient.getId(), "Prescription créée");
+
         return saved;
     }
 
@@ -40,6 +51,7 @@ public class PrescriptionService {
             }
         }
     }
+
     @Transactional
     public Prescription update(Long id, PrescriptionController.CreatePrescription req, DoctorProfile doctor) {
         Prescription prescription = prescriptions.findById(id)
@@ -59,24 +71,28 @@ public class PrescriptionService {
         prescription.setEndDate(req.getEndDate());
 
         // Supprimer les anciens doseTimes
-
         prescription.getDoseTimes().clear();
 
         // Ajouter les nouveaux doseTimes avec lien à la prescription
-
         List<DoseTime> newDoseTimes = req.getDoseTimes().stream()
                 .map(hm -> {
                     DoseTime dt = new DoseTime();
                     dt.setHour(hm.getHour());
                     dt.setMinute(hm.getMinute());
-                    dt.setPrescription(prescription); // Associer explicitement à la prescription
+                    dt.setPrescription(prescription);
                     return dt;
                 })
                 .collect(Collectors.toList());
         prescription.getDoseTimes().addAll(newDoseTimes);
 
-        return prescriptions.save(prescription);
+        Prescription updated = prescriptions.save(prescription);
+
+        // Synchronisation automatique avec le distributeur après modification
+        syncWithDispenser(patient.getId(), "Prescription modifiée");
+
+        return updated;
     }
+
     @Transactional
     public void delete(Long id, DoctorProfile doctor) {
         Prescription prescription = prescriptions.findById(id)
@@ -84,9 +100,35 @@ public class PrescriptionService {
         if (!prescription.getDoctor().equals(doctor)) {
             throw new IllegalStateException("Not your prescription");
         }
-        // Supprimer explicitement les intakeEvents si cascade n'est pas utilisé
 
+        Long patientId = prescription.getPatient().getId();
+
+        // Supprimer explicitement les intakeEvents si cascade n'est pas utilisé
         intakeEvents.deleteByPrescriptionId(id);
         prescriptions.delete(prescription);
+
+        // Re-synchroniser le distributeur après suppression
+        syncWithDispenser(patientId, "Prescription supprimée");
+    }
+
+    /**
+     * Méthode utilitaire pour synchroniser avec le distributeur
+     * Gère les erreurs de manière silencieuse pour ne pas bloquer les opérations principales
+     */
+    private void syncWithDispenser(Long patientId, String operation) {
+        try {
+            boolean success = dispenserService.syncPrescriptionsToDispenser(patientId);
+            if (success) {
+                log.info("Distributeur synchronisé avec succès après: {}", operation);
+            } else {
+                log.warn("Échec de la synchronisation du distributeur après: {}", operation);
+            }
+        } catch (IllegalStateException e) {
+            // Pas de distributeur configuré pour ce patient - c'est normal
+            log.debug("Pas de distributeur configuré pour le patient {}: {}", patientId, e.getMessage());
+        } catch (Exception e) {
+            // Erreur de communication avec le distributeur - on log mais on ne bloque pas
+            log.error("Erreur lors de la synchronisation du distributeur après {}: {}", operation, e.getMessage());
+        }
     }
 }
