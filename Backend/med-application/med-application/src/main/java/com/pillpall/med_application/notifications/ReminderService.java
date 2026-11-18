@@ -30,7 +30,14 @@ public class ReminderService {
         Instant now = Instant.now();
 
         var toMiss = intakes.findByStatusAndScheduledAtBefore(IntakeEvent.Status.PENDING, now.minusSeconds(intakeWindowMinutes*60L));
-        for (var ev : toMiss) ev.setStatus(IntakeEvent.Status.MISSED);
+        for (var ev : toMiss) {
+            long countFcm = attempts.findByIntakeEventId(ev.getId()).stream()
+                    .filter(a -> a.getChannel().equals("FCM")).count();
+            if (countFcm >= 4) {
+                escalate(ev);
+            }
+            ev.setStatus(IntakeEvent.Status.MISSED);
+        }
 
         var pending = intakes.findByStatusAndScheduledAtBetween(IntakeEvent.Status.PENDING, now.minusSeconds(3600), now);
         for (var ev : pending) {
@@ -41,10 +48,6 @@ public class ReminderService {
                     (minutesSince>=30 && countFcm==2) || (minutesSince>=45 && countFcm==3)) {
                 boolean ok = sendFcm(ev);
                 logAttempt(ev, "FCM", ok, ok ? "sent" : "fail");
-            }
-
-            if (minutesSince >= intakeWindowMinutes && countFcm >= 4) {
-                escalate(ev);
             }
         }
     }

@@ -8,6 +8,8 @@ import java.util.*;
 
 public interface IntakeEventRepository extends JpaRepository<IntakeEvent, Long> {
 
+    List<IntakeEvent> findByPrescriptionPatientIdAndScheduledAtAfter(Long patientId, Instant after);
+
     List<IntakeEvent> findByStatusAndScheduledAtBetween(IntakeEvent.Status status, Instant from, Instant to);
 
     List<IntakeEvent> findByStatusAndScheduledAtBefore(IntakeEvent.Status status, Instant before);
@@ -17,6 +19,8 @@ public interface IntakeEventRepository extends JpaRepository<IntakeEvent, Long> 
     List<IntakeEvent> findByPrescriptionPatientIdAndStatus(Long patientId, IntakeEvent.Status status);
 
     List<IntakeEvent> findByPrescriptionPatientIdAndScheduledAtBetween(Long patientId, Instant todayStart, Instant tomorrowStart);
+
+    List<IntakeEvent> findByPrescriptionPatientIdAndScheduledAtBetweenAndStatus(Long patientId, Instant from, Instant to, IntakeEvent.Status status);
 
     // ========== NOUVELLES MÉTHODES POUR L'INTÉGRATION DISTRIBUTEUR ==========
 
