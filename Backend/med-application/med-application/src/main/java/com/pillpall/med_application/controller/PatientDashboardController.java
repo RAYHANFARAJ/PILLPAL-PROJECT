@@ -129,9 +129,9 @@ public class PatientDashboardController {
                     Instant scheduledAt = scheduledDateTime.atZone(ZoneId.systemDefault()).toInstant();
 
                     // Vérifier si l'événement existe déjà
-                    boolean eventExists = intakeEventRepository
+                    boolean eventExists = !intakeEventRepository
                             .findByPrescriptionIdAndScheduledAt(prescription.getId(), scheduledAt)
-                            .isPresent();
+                            .isEmpty();
 
                     if (!eventExists && scheduledAt.isAfter(now) && scheduledAt.isBefore(next24Hours)) {
                         IntakeEvent event = new IntakeEvent();
