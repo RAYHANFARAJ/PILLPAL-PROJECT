@@ -39,6 +39,11 @@ public class AuthController {
             return ResponseEntity.badRequest().body(Map.of("error", "Email already exists"));
         }
         var role = roles.findByName(req.getRole()).orElseThrow(() -> new IllegalArgumentException("Role not found"));
+
+        if ("ROLE_DOCTOR".equals(role.getName()) && req.getSpecialtyId() == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "SpecialtyId is required for doctors"));
+        }
+
         var user = User.builder()
                 .email(req.getEmail())
                 .password(encoder.encode(req.getPassword()))
@@ -64,9 +69,6 @@ public class AuthController {
         }
         //Sinon si l'utilisateur est un médecin il choisit sa spécialité
         else if ("ROLE_DOCTOR".equals(role.getName())) {
-            if (req.getSpecialtyId() == null) {
-                return ResponseEntity.badRequest().body(Map.of("error", "SpecialtyId is required for doctors"));
-            }
             var specialty = specialtyRepository.findById(req.getSpecialtyId())
                     .orElseThrow(() -> new IllegalArgumentException("Specialty not found"));
             doctors.save(DoctorProfile.builder()

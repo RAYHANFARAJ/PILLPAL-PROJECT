@@ -57,12 +57,17 @@ public class AdherenceService {
 
         if (confirmedEvents.isEmpty()) return 0.0;
 
-        double totalDelay = confirmedEvents.stream()
+        List<IntakeEvent> withConfirmation = confirmedEvents.stream()
                 .filter(e -> e.getConfirmedAt() != null)
+                .toList();
+
+        if (withConfirmation.isEmpty()) return 0.0;
+
+        double totalDelay = withConfirmation.stream()
                 .mapToDouble(e -> Duration.between(e.getScheduledAt(), e.getConfirmedAt()).toMinutes())
                 .sum();
 
-        return totalDelay / confirmedEvents.size();
+        return totalDelay / withConfirmation.size();
     }
 
     @Transactional
